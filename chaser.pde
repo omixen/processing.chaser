@@ -26,7 +26,8 @@ void fade( color fadeColor , int fadeLevel ) {
   noStroke(); fill(fadeColor, fadeLevel) ;
   rect(0,0, width,height) ;
 }
- 
+
+//update target based on the mouse
 void mousePressed()
 {
 
@@ -55,11 +56,15 @@ class Chaser
 	color cMain;
 	Grid gGrid;
 	PVector vPosition;
-	//
+	
 	PVector vLocation;
 	PVector vOldLocation;
 	PVector vVelocity;
 	float fSize;
+	
+	BinaryHeap hStack;
+	ArrayList vPath;
+
 	Chaser(color cM, Grid gG, int pX, int pY, float sZ)
 	{
 		cMain = cM;
@@ -80,10 +85,10 @@ class Chaser
 		line(vOldLocation.x, vOldLocation.y, loc.x, loc.y);
 		vOldLocation = loc;
 	}
-	void chase(PVector vT)
+	void chase(PVector target)
 	{
 		//vVelocity.limit(MAXVELOCITY);
-    	PVector targetVector = PVector.sub(vT, gGrid.getLocation(vPosition));  
+    	PVector targetVector = PVector.sub(target, gGrid.getLocation(vPosition));  
     	vVelocity.add(targetVector);
     	vVelocity.mult(.5);
     	PVector loc = this.getLocation();		
@@ -91,10 +96,31 @@ class Chaser
 		vPosition = gGrid.getPosition(loc);
 		updateLocation();
 	}
-	void findPath()
+	void findPath(PVector target)
 	{
-		start = vPosition;
-		costSoFar = 0;
+		start = vPosition;				
+		//vars to hold helper heap and resulting path
+		hStack =  new BinaryHeap();
+		hStack.push(new PathNode(start));
+		vPath = new ArrayList();
+		//if we're already at the target, done.
+		currentNode = hStack.pop();
+		while(currentNode.vPosition != target)
+		{
+			//vPath.add(currentNode);
+			neighbors = gGrid.getNeighbors(currentNode.vPosition);
+			for(p=0;p<neighbors.size();p++)
+			{
+				neighbor = PVector(neighbors.get(p));
+				cost = currentNode.gValue + gGrid[neighbor.x][neighbor.y];	
+
+			}			
+		}
+		//		
+	}
+	void runPath()
+	{
+		
 	}
 	void updateLocation()
 	{
@@ -152,13 +178,13 @@ class Grid
 		{
 			for(int k=0;k<vCount.y;k++)
 			{
-				if(grid[j][k] < 0)
+				if(grid[j][k] < 1)
 				{
 					rect(j*vStep.x, k*vStep.y, vStep.x, vStep.y);
 				}
 			}
 		}
-	}	
+	}
 	void initGrid()
 	{
 		for(int j=0;j<vCount.x;j++)
@@ -168,43 +194,96 @@ class Grid
 				grid[j][k] = 1;
 			}
 		}	
-	}
-	
+	}	
 	void generateObstacles(float amount)
 	{
 		int total = (amount*vCount.x*vCount.y);		
 		for(int j=0;j<total;j++)
 		{
-			grid[int(random(vCount.x))][int(random(vCount.y))] = -1;
+			grid[int(random(vCount.x))][int(random(vCount.y))] = 0;
 		}
 	}
-	PVector getLocation(PVector vP)
+	boolean isObstacle(PVector pos)
 	{
-		return new PVector((vP.x*vStep.x)+left, (vP.y*vStep.y)+top);
+		return grid[pos.x][pos.y] == 0;
 	}
-	PVector getPosition(PVector vL)
+	ArrayList getNeighbors(PVector pos)
 	{
-		return new PVector(floor((vL.x-left)/vStep.x), floor((vL.y-top)/vStep.y));
+		ret = new ArrayList();
+		if(pos.x>0 && !isObstacle(pos.x-1, pos.y))
+		{
+			//add left n
+			ret.add(new PVector(pos.x-1, pos.y));
+		}
+		if(pos.x>0 && pos.y>0 && !isObstacle(pos.x-1, pos.y-1))
+		{
+			//add top left n
+			ret.add(new PVector(pos.x-1, pos.y-1));
+		}
+		if(pos.x>0 && pos.y<vCount.y-1 && !isObstacle(pos.x-1, pos.y+1))
+		{
+			//add bottom left n
+			ret.add(new PVector(pos.x-1, pos.y+1));	
+		}
+		if(pos.y>0 && !isObstacle(pos.x, pos.y-1))
+		{
+			//add top n
+			ret.add(new PVector(pos.x, pos.y-1));
+		}
+		if(pos.x<vCount.x-1 && !isObstacle(pos.x+1, pos.y))
+		{
+			//add right n
+			ret.add(new PVector(pos.x+1, pos.y));	
+		}
+		if(pos.y>0 && pos.x<vCount.x-1 && !isObstacle(pos.x+1, pos.y-1))
+		{
+			//add top right n
+			ret.add(new PVector(pos.x+1, pos.y-1));
+		}
+		if(pos.y<vCount.y-1 && pos.x<vCount.x-1 && !isObstacle(pos.x+1, pos.y+1))
+		{
+			//add bottom right n
+			ret.add(new PVector(pos.x+1, pos.y+1));
+		}
+		if(pos.y<vCount.y-1 && !isObstacle(pos.x, pos.y+1))
+		{
+			//add bottom n
+			ret.add(new PVector(pos.x, pos.y+1));
+		}
+		return ret;
+	}
+	PVector getLocation(PVector pos)
+	{
+		return new PVector((pos.x*vStep.x)+left, (pos.y*vStep.y)+top);
+	}
+	PVector getPosition(PVector loc)
+	{
+		return new PVector(floor((loc.x-left)/vStep.x), floor((loc.y-top)/vStep.y));
 	}
 }
 
+/*
+ * REPRESENTATION of the NODE In the Grid
+ */
 class PathNode
 {
 	PVector vPosition;
 	float fValue;
 	float gValue;
 	float hValue;
-	boolean visited;
+	boolean bVisited;
 	PathNode(PVector pos)
 	{
 		vPosition = pos
 		fValue = 0;
 		gValue = 0;
 		hValue = 0;
-		visited = false;
+		bVisited = false;
 	}
 }
-
+/*
+ * BINARY HEAP tightly integrated with PathNode
+ */
 class BinaryHeap
 {
 	ArrayList alTree;
