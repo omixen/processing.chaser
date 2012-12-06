@@ -17,8 +17,8 @@ void draw()
 	background(16,60,71,255);
 	g_grid.draw();
 	smooth();	
-	g_chaser.chase(new PVector(mouseX, mouseY));
-	g_chaser.draw();
+	//g_chaser.chase(new PVector(mouseX, mouseY));
+	//g_chaser.draw();
 	//fade(0, 10);
 }
 
@@ -27,7 +27,7 @@ void fade( color fadeColor , int fadeLevel ) {
   rect(0,0, width,height) ;
 }
 
-//update target based on the mouse
+//update target based on the mouse position
 void mousePressed()
 {
 
@@ -65,6 +65,10 @@ class Chaser
 	BinaryHeap hStack;
 	ArrayList vPath;
 
+	//heuristic type
+	// 0. djikstra (no heuristic) 1. manhattan, 2.diagonal (default), 3.euclidean 
+	int hType;
+
 	Chaser(color cM, Grid gG, int pX, int pY, float sZ)
 	{
 		cMain = cM;
@@ -74,6 +78,7 @@ class Chaser
 		vOldLocation = vLocation;
 		vVelocity = new PVector(0, 0);
 		fSize = sZ;
+		hType = 2;
 	}
 	void draw()
 	{		
@@ -98,29 +103,59 @@ class Chaser
 	}
 	void findPath(PVector target)
 	{
-		start = vPosition;				
+		start = vPosition;
 		//vars to hold helper heap and resulting path
-		hStack =  new BinaryHeap();
-		hStack.push(new PathNode(start));
+		hOpenStack =  new BinaryHeap();
+		hStack.push(gGrid[start.x][start.y]);
 		vPath = new ArrayList();
 		//if we're already at the target, done.
-		currentNode = hStack.pop();
-		while(currentNode.vPosition != target)
+		currentNode = hOpenStack.pop();
+		//until we find the target or nothing else in our stack
+		while(currentNode != null && currentNode.vPosition != target)
 		{
 			//vPath.add(currentNode);
 			neighbors = gGrid.getNeighbors(currentNode.vPosition);
+			currentNode.bClosed = true;
 			for(p=0;p<neighbors.size();p++)
 			{
-				neighbor = PVector(neighbors.get(p));
-				cost = currentNode.gValue + gGrid[neighbor.x][neighbor.y];	
-
-			}			
+				neighbor = PathNode(neighbors.get(p));		
+				//no need to check if neighbor is an obstacle
+				if(gGrid.isObstacle(neighbor.vPosition))
+				{
+					continue;
+				}
+				//calculate cost to neighbor
+				cost = currentNode.gValue + gGrid[neighbor.x][neighbor.y];
+				if(neighbor.bVisited && cost<neighbor.gValue)
+				{
+					neighbor.bVisited = false;
+				}
+				if(neighbor.bClosed && cost<neighbor.gValue)
+				{
+					neighbor.bClosed = false;
+				}
+				//
+				if(!neighbor.bVisited && !neighbor.bClosed && cost<neighbor.gValue)
+				{
+					neighbor.bVisited = true;
+					neighbor.gValue = cost;
+					neighbor.hValue = h_diagonal(neighbor.vPosition, target);
+					neighbor.fValue = neighbor.gValue + neighbor.hValue;
+					neighbor.nParent = currentNode;
+					//add to our stack
+					hOpenStack.push(neighbor);
+				}
+			}
+			//next
+			currentNode = hStack.pop();
 		}
-		//		
-	}
+		//calculate the path as reverse path from target
+		targetNode = PathNode(grid[target.x][target.y]);
+		vPath = targetNode.getReversePath();
+	}	
 	void runPath()
 	{
-		
+
 	}
 	void updateLocation()
 	{
@@ -134,7 +169,7 @@ class Chaser
 
 class Grid
 {
-	int[][] grid;
+	PathNode[][] grid;
 	PVector vCount, vSize, vStep;
 	float left, top;
 
@@ -146,9 +181,11 @@ class Grid
 		left = vStep.x/2;
 		top = vStep.y/2;
 		//create grid
-		grid = new int[vCount.x][vCount.y];
+		grid = new PathNode[vCount.x][vCount.y];
 		this.initGrid();
+		alert(grid[int(random(100))][int(random(100))].fCost);
 		this.generateObstacles(.2);
+		alert(grid[int(random(100))][int(random(100))].fCost);
 	}
 	void draw()
 	{
@@ -158,7 +195,25 @@ class Grid
 		line(vSize.x, 0, vSize.x, vSize.y);
 		line(vSize.x, vSize.y, 0, vSize.y);
 		line(0, vSize.y, 0, 0);
-		//x
+		//grid
+		//drawGrid();
+		//obstacles
+		noStroke();
+		fill(70,140,136);
+		for(int j=0;j<vCount.x;j++)
+		{
+			for(int k=0;k<vCount.y;k++)
+			{
+				if(grid[j][k].fCost < 1)
+				{
+					rect(j*vStep.x, k*vStep.y, vStep.x, vStep.y);
+				}
+			}
+		}
+	}
+	void drawGrid()
+	{
+		//x		
 		float temp = 0;
 		for(i=0;i<vCount.x;i++)
 		{
@@ -171,19 +226,6 @@ class Grid
 			temp = i*vStep.y;
 			line(0, temp, vSize.x, temp);
 		}
-		//obstacles
-		noStroke();
-		fill(74,54,70);
-		for(int j=0;j<vCount.x;j++)
-		{
-			for(int k=0;k<vCount.y;k++)
-			{
-				if(grid[j][k] < 1)
-				{
-					rect(j*vStep.x, k*vStep.y, vStep.x, vStep.y);
-				}
-			}
-		}
 	}
 	void initGrid()
 	{
@@ -191,21 +233,21 @@ class Grid
 		{
 			for(int k=0;k<vCount.y;k++)
 			{
-				grid[j][k] = 1;
+				grid[j][k] = new PathNode(new PVector(j, k));
 			}
-		}	
+		}
 	}	
 	void generateObstacles(float amount)
 	{
-		int total = (amount*vCount.x*vCount.y);		
+		int total = (amount*vCount.x*vCount.y);
 		for(int j=0;j<total;j++)
 		{
-			grid[int(random(vCount.x))][int(random(vCount.y))] = 0;
+			grid[int(random(vCount.x))][int(random(vCount.y))].fCost = 0;
 		}
 	}
 	boolean isObstacle(PVector pos)
 	{
-		return grid[pos.x][pos.y] == 0;
+		return grid[pos.x][pos.y].fCost == 0;
 	}
 	ArrayList getNeighbors(PVector pos)
 	{
@@ -271,14 +313,32 @@ class PathNode
 	float fValue;
 	float gValue;
 	float hValue;
+	float fCost;
 	boolean bVisited;
+	boolean bClosed;
+	PathNode nParent;
 	PathNode(PVector pos)
 	{
 		vPosition = pos
 		fValue = 0;
 		gValue = 0;
 		hValue = 0;
+		fCost = 1;
 		bVisited = false;
+		bClosed = false;
+		nParent = null;
+	}
+	ArrayList getReversePath()
+	{
+		ret = new ArrayList();
+		ret.add(this);
+		temp = nParent;
+		while(temp!=null)
+		{
+			ret.add(temp);
+			temp = temp.nParent;
+		}
+		return ret;
 	}
 }
 /*
@@ -298,6 +358,10 @@ class BinaryHeap
 	}
 	PathNode pop()
 	{
+		if(alTree.size() == 0)
+		{
+			return null;
+		}
 		ret = PathNode(alTree.get(0));
 		last = PathNode(alTree.remove(alTree.size()-1));
 		if(alTree.size()>0)
