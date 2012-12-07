@@ -9,14 +9,16 @@ void setup()
 	size(801, 801);    
     frameRate(24);
     g_grid = new Grid(100, 100, 800, 800);
-    g_chaser = new Chaser(color(132,47,68), g_grid, 1, 1, 8);
+    g_chaser = new Chaser(color(132,47,68), g_grid, int(random(100)), int(random(100)), 8);
 }
 
 void draw()
 {
 	background(16,60,71,255);
 	g_grid.draw();
-	smooth();	
+	smooth();
+	g_chaser.findPath(new PVector(int(random(100)), int(random(100))));
+	g_chaser.drawPath();
 	//g_chaser.chase(new PVector(mouseX, mouseY));
 	//g_chaser.draw();
 	//fade(0, 10);
@@ -105,13 +107,14 @@ class Chaser
 	{
 		start = vPosition;
 		//vars to hold helper heap and resulting path
-		hOpenStack =  new BinaryHeap();
-		hStack.push(gGrid[start.x][start.y]);
+		hOpenStack =  new BinaryHeap();		
+		hOpenStack.push(gGrid.get(start));
 		vPath = new ArrayList();
 		//if we're already at the target, done.
 		currentNode = hOpenStack.pop();
 		//until we find the target or nothing else in our stack
-		while(currentNode != null && currentNode.vPosition != target)
+		alert(currentNode);
+		while(currentNode != undefined && currentNode != null && currentNode.vPosition != target)
 		{
 			//vPath.add(currentNode);
 			neighbors = gGrid.getNeighbors(currentNode.vPosition);
@@ -125,7 +128,7 @@ class Chaser
 					continue;
 				}
 				//calculate cost to neighbor
-				cost = currentNode.gValue + gGrid[neighbor.x][neighbor.y];
+				cost = currentNode.gValue + neighbor.fCost;
 				if(neighbor.bVisited && cost<neighbor.gValue)
 				{
 					neighbor.bVisited = false;
@@ -150,12 +153,18 @@ class Chaser
 			currentNode = hStack.pop();
 		}
 		//calculate the path as reverse path from target
-		targetNode = PathNode(grid[target.x][target.y]);
+		targetNode = gGrid.get(target);
 		vPath = targetNode.getReversePath();
 	}	
-	void runPath()
+	void drawPath()
 	{
-
+		noStroke();
+		fill(210,140,136);
+		for(w=0;w<vPath.size();w++)
+		{
+			vect = PVector(vPath.get(w));
+			rect(vect.x*vStep.x, vect.y*vStep.y, vStep.x, vStep.y);
+		}
 	}
 	void updateLocation()
 	{
@@ -182,10 +191,8 @@ class Grid
 		top = vStep.y/2;
 		//create grid
 		grid = new PathNode[vCount.x][vCount.y];
-		this.initGrid();
-		alert(grid[int(random(100))][int(random(100))].fCost);
-		this.generateObstacles(.2);
-		alert(grid[int(random(100))][int(random(100))].fCost);
+		this.initGrid();		
+		this.generateObstacles(.2);		
 	}
 	void draw()
 	{
@@ -248,6 +255,14 @@ class Grid
 	boolean isObstacle(PVector pos)
 	{
 		return grid[pos.x][pos.y].fCost == 0;
+	}
+	PathNode get(PVector pos)
+	{
+		return grid[pos.x][pos.y];
+	}
+	PathNode get(int pX, int pY)
+	{
+		return grid[pX][pY];
 	}
 	ArrayList getNeighbors(PVector pos)
 	{
@@ -355,6 +370,7 @@ class BinaryHeap
 	{
 		alTree.add(value);
 		this.moveUp(this.alTree.size()-1);
+		alert(alTree.size());
 	}
 	PathNode pop()
 	{
@@ -369,6 +385,8 @@ class BinaryHeap
 			alTree.set(0, last);
 			this.moveDown(0);
 		}
+		alert(alTree.size());
+		alert(last);
 		return ret;
 	}
 	void moveUp(int idx)
